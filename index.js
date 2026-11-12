@@ -63,6 +63,17 @@ REGLAS DE ATENCIÓN Y COMPORTAMIENTO EN WHATSAPP:
 4. Activación de Tickets de Soporte: Si el usuario reporta una falla técnica, error, caída de sistema o necesita levantar un ticket, indícale explícitamente que escriba únicamente la palabra "Soporte" (o seleccione el botón correspondiente) para iniciar el registro de su caso. No sugieras ninguna otra palabra clave.
 5. Derivación a Asesor Humano: Si el cliente solicita una cotización formal de proyecto, diagnóstico técnico complejo, contratación de pólizas de soporte, atención urgente o cualquier trámite específico que requiera evaluación personalizada, invítalo amablemente a contactar a un asesor humano (o seleccionar la opción de hablar con un asesor en el menú de WhatsApp).`;
 
+const peticionesRecientes = new Map();
+
+setInterval(() => {
+  const ahora = Date.now();
+  for (const [clave, tiempo] of peticionesRecientes.entries()) {
+    if (ahora - tiempo > 10000) {
+      peticionesRecientes.delete(clave);
+    }
+  }
+}, 15000);
+
 const generarConFallback = async (promptCompleto) => {
   const inicio = Date.now();
   const modelosCandidatos = [
@@ -161,6 +172,22 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
         mensaje: 'El parámetro "pregunta" es obligatorio y debe ser una cadena de texto no vacía.'
       });
     }
+
+    const clavePeticion = `${ticket_id || 'general'}:${pregunta.trim().toLowerCase()}`;
+    const ahora = Date.now();
+
+    if (peticionesRecientes.has(clavePeticion)) {
+      const tiempoPrevio = peticionesRecientes.get(clavePeticion);
+      if (ahora - tiempoPrevio < 6000) {
+        console.warn(`[Deduplicación] Petición duplicada de WhatsApp/Typebot descartada para: "${pregunta.trim()}"`);
+        return res.status(200).json({
+          status: 'duplicate',
+          respuesta: ''
+        });
+      }
+    }
+
+    peticionesRecientes.set(clavePeticion, ahora);
 
     let promptCompleto = '';
     if (ticket_id) {
