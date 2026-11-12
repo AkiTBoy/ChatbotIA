@@ -63,6 +63,31 @@ REGLAS DE ATENCIÓN Y COMPORTAMIENTO EN WHATSAPP:
 4. Activación de Tickets de Soporte: Si el usuario reporta una falla técnica, error, caída de sistema o necesita levantar un ticket, indícale explícitamente que escriba únicamente la palabra "Soporte" (o seleccione el botón correspondiente) para iniciar el registro de su caso. No sugieras ninguna otra palabra clave.
 5. Derivación a Asesor Humano: Si el cliente solicita una cotización formal de proyecto, diagnóstico técnico complejo, contratación de pólizas de soporte, atención urgente o cualquier trámite específico que requiera evaluación personalizada, invítalo amablemente a contactar a un asesor humano (o seleccionar la opción de hablar con un asesor en el menú de WhatsApp).`;
 
+const ejecutarConReintentos = async (fn, maxReintentos = 3, retrasoInicialMs = 1200) => {
+  let intento = 0;
+  let retraso = retrasoInicialMs;
+
+  while (intento < maxReintentos) {
+    try {
+      return await fn();
+    } catch (error) {
+      intento++;
+      const esErrorTemporal =
+        error.status === 503 ||
+        error.status === 429 ||
+        (error.message && error.message.includes('high demand'));
+
+      if (esErrorTemporal && intento < maxReintentos) {
+        console.warn(`[Intento ${intento}/${maxReintentos}] Modelo en alta demanda (503/429). Reintentando en ${retraso}ms...`);
+        await new Promise((res) => setTimeout(res, retraso));
+        retraso *= 2;
+      } else {
+        throw error;
+      }
+    }
+  }
+};
+
 app.use(express.json());
 
 app.use((err, req, res, next) => {
@@ -125,13 +150,15 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
 
     const modeloSeleccionado = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
-    const response = await ai.models.generateContent({
-      model: modeloSeleccionado,
-      contents: promptCompleto,
-      config: {
-        systemInstruction: systemInstruction
-      }
-    });
+    const response = await ejecutarConReintentos(() =>
+      ai.models.generateContent({
+        model: modeloSeleccionado,
+        contents: promptCompleto,
+        config: {
+          systemInstruction: systemInstruction
+        }
+      })
+    );
 
     const respuestaTexto = response.text || '';
 
@@ -142,6 +169,13 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
 
   } catch (error) {
     console.error('Error al generar respuesta con Google Gen AI:', error);
+
+    if (error.status === 503 || (error.message && error.message.includes('high demand'))) {
+      return res.status(200).json({
+        status: 'success',
+        respuesta: 'En este momento nuestro asistente virtual presenta una alta demanda de consultas. Por favor, realiza tu pregunta nuevamente en unos instantes o escribe "Soporte" para canalizar tu caso.'
+      });
+    }
 
     const statusHttp = error.status || (error.statusCode ? error.statusCode : 500);
     const mensajeError = error.message || 'Ocurrió un error interno en el servidor al procesar la solicitud con IA.';
