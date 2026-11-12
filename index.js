@@ -86,6 +86,7 @@ const generarConFallback = async (promptCompleto) => {
 
       if (response && response.text) {
         console.log(`[Éxito] Respuesta generada exitosamente con ${modelo} en ${Date.now() - inicio}ms`);
+        console.log(`[Respuesta IA]:\n${response.text.trim()}\n`);
         return response.text;
       }
     } catch (err) {
