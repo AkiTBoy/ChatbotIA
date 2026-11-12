@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,7 +10,7 @@ if (!geminiApiKey) {
   console.warn('ADVERTENCIA: La variable de entorno GEMINI_API_KEY no está configurada.');
 }
 
-const genAI = new GoogleGenerativeAI(geminiApiKey || '');
+const ai = new GoogleGenAI({ apiKey: geminiApiKey || '' });
 
 const systemInstruction = `Eres el asistente virtual oficial de Ciudad Plástika (CDPK), empresa líder en servicios y soluciones tecnológicas integrales con sede en Pachuca de Soto, Hidalgo, México.
 
@@ -63,11 +63,6 @@ REGLAS DE ATENCIÓN Y COMPORTAMIENTO EN WHATSAPP:
 4. Activación de Tickets de Soporte: Si el usuario reporta una falla técnica, error, caída de sistema o necesita levantar un ticket, indícale explícitamente que escriba únicamente la palabra "Soporte" (o seleccione el botón correspondiente) para iniciar el registro de su caso. No sugieras ninguna otra palabra clave.
 5. Derivación a Asesor Humano: Si el cliente solicita una cotización formal de proyecto, diagnóstico técnico complejo, contratación de pólizas de soporte, atención urgente o cualquier trámite específico que requiera evaluación personalizada, invítalo amablemente a contactar a un asesor humano (o seleccionar la opción de hablar con un asesor en el menú de WhatsApp).`;
 
-const model = genAI.getGenerativeModel({
-  model: 'gemini-3.8-flash',
-  systemInstruction
-});
-
 app.use(express.json());
 
 app.use((err, req, res, next) => {
@@ -106,7 +101,7 @@ const autenticarToken = (req, res, next) => {
 app.get('/health', (req, res) => {
   return res.status(200).json({
     status: 'online',
-    servicio: 'Webhook Typebot - Google Gemini',
+    servicio: 'Webhook Typebot - Google Gen AI (Gemini)',
     timestamp: new Date().toISOString()
   });
 });
@@ -128,8 +123,17 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
     }
     promptCompleto += `Pregunta del usuario: ${pregunta.trim()}`;
 
-    const resultado = await model.generateContent(promptCompleto);
-    const respuestaTexto = resultado.response.text();
+    const modeloSeleccionado = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+    const response = await ai.models.generateContent({
+      model: modeloSeleccionado,
+      contents: promptCompleto,
+      config: {
+        systemInstruction: systemInstruction
+      }
+    });
+
+    const respuestaTexto = response.text || '';
 
     return res.status(200).json({
       status: 'success',
@@ -137,10 +141,14 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error interno al generar respuesta con Gemini:', error);
-    return res.status(500).json({
+    console.error('Error al generar respuesta con Google Gen AI:', error);
+
+    const statusHttp = error.status || (error.statusCode ? error.statusCode : 500);
+    const mensajeError = error.message || 'Ocurrió un error interno en el servidor al procesar la solicitud con IA.';
+
+    return res.status(statusHttp >= 400 && statusHttp < 600 ? statusHttp : 500).json({
       status: 'error',
-      mensaje: 'Ocurrió un error interno en el servidor al procesar la solicitud con IA.'
+      mensaje: mensajeError
     });
   }
 });
