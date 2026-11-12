@@ -64,16 +64,18 @@ REGLAS DE ATENCIÓN Y COMPORTAMIENTO EN WHATSAPP:
 5. Derivación a Asesor Humano: Si el cliente solicita una cotización formal de proyecto, diagnóstico técnico complejo, contratación de pólizas de soporte, atención urgente o cualquier trámite específico que requiera evaluación personalizada, invítalo amablemente a contactar a un asesor humano (o seleccionar la opción de hablar con un asesor en el menú de WhatsApp).`;
 
 const generarConFallback = async (promptCompleto) => {
+  const inicio = Date.now();
   const modelosCandidatos = [
-    process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite'
+    process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.6-flash'
   ];
 
   let ultimoError = null;
 
   for (const modelo of modelosCandidatos) {
     try {
+      console.log(`[IA] Solicitando respuesta con modelo: ${modelo}...`);
       const response = await ai.models.generateContent({
         model: modelo,
         contents: promptCompleto,
@@ -83,6 +85,7 @@ const generarConFallback = async (promptCompleto) => {
       });
 
       if (response && response.text) {
+        console.log(`[Éxito] Respuesta generada exitosamente con ${modelo} en ${Date.now() - inicio}ms`);
         return response.text;
       }
     } catch (err) {
@@ -93,8 +96,7 @@ const generarConFallback = async (promptCompleto) => {
         (err.message && err.message.includes('high demand'));
 
       if (esErrorSaturacion) {
-        console.warn(`Aviso: Modelo ${modelo} con alta demanda (503). Probando modelo alternativo...`);
-        await new Promise((res) => setTimeout(res, 800));
+        console.warn(`[Aviso] Modelo ${modelo} saturado (503). Probando siguiente alternativa...`);
         continue;
       }
 
@@ -164,6 +166,8 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
       promptCompleto += `Ticket ID: ${ticket_id}\n`;
     }
     promptCompleto += `Pregunta del usuario: ${pregunta.trim()}`;
+
+    console.log(`[Webhook] Petición entrante. Pregunta: "${pregunta.trim().substring(0, 60)}"`);
 
     const respuestaTexto = await generarConFallback(promptCompleto);
 
