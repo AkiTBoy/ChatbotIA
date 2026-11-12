@@ -123,7 +123,7 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
     }
     promptCompleto += `Pregunta del usuario: ${pregunta.trim()}`;
 
-    const modeloSeleccionado = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modeloSeleccionado = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
     const response = await ai.models.generateContent({
       model: modeloSeleccionado,
