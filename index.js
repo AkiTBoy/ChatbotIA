@@ -192,28 +192,13 @@ app.post('/api/ia-responder', autenticarToken, async (req, res) => {
     peticionesRecientes.set(clavePeticion, ahora);
 
     const preguntaLimpia = pregunta.trim().toLowerCase();
+    const palabrasReservadas = ['soporte', 'agente humano', 'asignar prioridad'];
 
-    if (preguntaLimpia.includes('soporte')) {
-      console.log(`[Filtro] Palabra clave "Soporte" detectada. Respondida sin consultar a Gemini.`);
+    if (palabrasReservadas.some((palabra) => preguntaLimpia.includes(palabra))) {
+      console.log(`[Bypass] Palabra clave del chatbot detectada en: "${pregunta.trim()}". Petición ignorada sin llamar a la IA.`);
       return res.status(200).json({
-        status: 'success',
-        respuesta: 'Para registrar tu reporte técnico y que un especialista de CDPK lo atienda, por favor escribe únicamente la palabra *Soporte*.'
-      });
-    }
-
-    if (preguntaLimpia.includes('agente humano') || preguntaLimpia.includes('asesor humano')) {
-      console.log(`[Filtro] Palabra clave "Agente Humano" detectada. Respondida sin consultar a Gemini.`);
-      return res.status(200).json({
-        status: 'success',
-        respuesta: 'Para comunicarte directamente con nuestro personal y recibir atención personalizada, escribe por favor las palabras *Agente Humano*.'
-      });
-    }
-
-    if (preguntaLimpia.includes('asignar prioridad')) {
-      console.log(`[Filtro] Comando interno "Asignar Prioridad" bloqueado.`);
-      return res.status(200).json({
-        status: 'success',
-        respuesta: 'Esta función está reservada únicamente para la gestión interna del equipo técnico de CDPK.'
+        status: 'ignored',
+        respuesta: ''
       });
     }
 
